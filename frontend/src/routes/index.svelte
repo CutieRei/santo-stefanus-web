@@ -1,2 +1,13 @@
-<h1>Welcome to SvelteKit</h1>
-<p>Visit <a href="https://kit.svelte.dev">kit.svelte.dev</a> to read the documentation</p>
+
+<ul>
+    {#await fetch("/api/items").then(r => r.json())}
+        <p>fetching...</p>
+    {:then items}
+        {#each items as item}
+            <li>
+                <a href="/barang/{item.id}">{item.name}</a>
+                <p>Rp.{item.price.toLocaleString("en-US")}</p>
+            </li>
+        {/each}
+    {/await}
+</ul>
