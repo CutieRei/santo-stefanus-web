@@ -11,3 +11,14 @@
         {/each}
     {/await}
 </ul>
+
+<style>
+
+    ul {
+        padding: 1rem;
+    }
+    li {
+        list-style: none;
+        margin: 0;
+    }
+</style>

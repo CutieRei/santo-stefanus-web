@@ -1,16 +1,36 @@
+<script>
+    import Nav from "../components/Nav.svelte"
+</script>
 
 <main>
-    <div>
-        <slot></slot>
+    <Nav/>
+    <div id="actual-body">
+        <div>
+            <slot></slot>
+        </div>
     </div>
 </main>
 
-<style>
+<style lang="scss">
     main {
         display: flex;
-        justify-content: center;
+        flex-direction: column;
         align-items: center;
         width: 100vw;
         height: 100vh;
+        background-color: rgba(0,0,0,0);
+
+        #actual-body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+
+            div {
+                background-color: white;
+                border-radius: 10px;
+                padding: 1rem;
+            }
+        }
     }
 </style>

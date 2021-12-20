@@ -2,7 +2,7 @@
 <script context="module">
 
     export async function load({ fetch, page}) {
-        let data = await fetch(`http://${page.host}/api/items/${page.params.id}`).then(r => {
+        let data = await fetch(`https://${page.host}/api/items/${page.params.id}`).then(r => {
             if(r.status == 200) return r.json()
         })
         if(data == null) return {
@@ -19,20 +19,23 @@
 <script lang="ts">
     import Loading from "../../components/Loading.svelte"
     export let item: {id: string, name: string, price: number, total: number}
-    let value: string;
+    let value: string
+    let inCart = 0
 
     function quantityChange() {
         let button = <HTMLButtonElement>document.querySelector("#add-cart")
-        let value = parseInt(value)
-        if(isNaN(value) || value > item.total) button.disabled = true
+        let val = parseInt(value)
+        if(isNaN(val) || val > item.total || val+inCart > item.total) button.disabled = true
         else button.disabled = false;
     }
+
+    $: value, quantityChange
 
     async function init() {
         let r = await fetch(`/api/cart?id=${item.id}`)
         if(r.status == 200) {
             let data = await r.json()
-            value = data.quantity
+            inCart = data.quantity
         }
     }
 
@@ -42,13 +45,14 @@
             method: "post",
             body: JSON.stringify({
                 id: item.id,
-                quantity: in
+                quantity: value
             }),
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             }
         })
+        document.location.reload()
     }
 </script>
 
@@ -59,9 +63,12 @@
     {#await init()}
         <Loading/>
     {:then}
-        <input bind:value="{value}" on:input="{quantityChange}" id="quantity" name="quantity" type="number" value="{value}">
+        <input bind:value="{value}" on:input="{quantityChange}" id="quantity" name="quantity" type="number">
     {/await}
     <button on:click="{(e) => {e.preventDefault(); document.getElementById('popup').style.display = 'block'}}" id="add-cart" disabled>Add to cart</button>
+    {#if inCart > 0}
+        <p><b>{inCart}</b> in your cart</p>
+    {/if}
 </form>
 
 <div id="popup">
@@ -69,7 +76,7 @@
         <div>
             <h1 style="width: 100%; height: 100%; text-align: center">Are you sure?</h1>
             <div>
-                <button on:click="{() => document.querySelector('form').submit()}">Yes</button>
+                <button on:click="{() => submit()}">Yes</button>
                 <button on:click="{() => document.getElementById('popup').style.display = 'none'}">No</button>
             </div>
         </div>
