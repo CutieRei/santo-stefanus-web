@@ -22,11 +22,11 @@ import dotenv
 dotenv.load_dotenv()
 
 vipay_url = "https://vipay.loca.lt/"
-redirect = "{}/api/pay".format(os.environ["HOST"])
+redirect = "{}/api/pay".format(os.environ["S_HOST"])
 pay_url = vipay_url + "pay?transaction_id={0}"
-hostname = os.environ["HOSTNAME"]
-user = os.environ["USER"]
-passwd = os.environ["PASSWORD"]
+hostname = os.environ["S_HOSTNAME"]
+user = os.environ["S_USERNAME"]
+passwd = os.environ["S_PASSWORD"]
 
 class state:
     db: asyncpg.Pool
