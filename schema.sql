@@ -44,5 +44,5 @@ price BIGINT NOT NULL,
 status BOOLEAN NOT NULL DEFAULT 'true');
 
 ALTER TABLE pembayaran ADD CONSTRAINT pembayaran_pemesanan_pemesanan_id FOREIGN KEY (pemesanan) REFERENCES pemesanan(id) ON DELETE CASCADE ON UPDATE NO ACTION;
-ALTER TABLE pemesanan_items ADD CONSTRAINT pemesanan_items_pemesanan_pemesanan_id FOREIGN KEY (pemesanan) REFERENCES pemesanan(id) ON DELETE NO ACTION ON UPDATE NO ACTION;
+ALTER TABLE pemesanan_items ADD CONSTRAINT pemesanan_items_pemesanan_pemesanan_id FOREIGN KEY (pemesanan) REFERENCES pemesanan(id) ON DELETE CASCADE ON UPDATE NO ACTION;
 ALTER TABLE pemesanan_items ADD CONSTRAINT pemesanan_items_barang_barang_id FOREIGN KEY (barang) REFERENCES barang(id) ON DELETE NO ACTION ON UPDATE NO ACTION;
