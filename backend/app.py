@@ -1,5 +1,5 @@
-from email.message import EmailMessage
-from typing import Any, Callable, Coroutine, Dict, Optional
+from email.message import EmailMessage, Message
+from typing import Any, Callable, Coroutine, Dict, Optional, Union
 from fastapi.param_functions import Form
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -28,20 +28,12 @@ hostname = os.environ["S_HOSTNAME"]
 user = os.environ["S_USERNAME"]
 passwd = os.environ["S_PASSWORD"]
 
+
 class state:
     db: asyncpg.Pool
     redis: aioredis.Redis
     http: aiohttp.ClientSession
     email: aiosmtplib.SMTP
-    email_task: asyncio.Task
-
-async def keep_alive():
-    while True:
-        try:
-            await state.email.ehlo()
-            await asyncio.sleep(30)
-        except asyncio.CancelledError:
-            return
 
 @dataclass
 class Transaction:
@@ -92,10 +84,14 @@ async def on_startup():
     state.db = await asyncpg.create_pool(
         "postgres://postgres@192.168.0.2/santo-stefanus", max_size=2, min_size=1
     )
-    state.email = aiosmtplib.SMTP(hostname=hostname, username=user, password=passwd, use_tls=True)
-    await state.email.connect()
-    state.email_task = asyncio.create_task(keep_alive())
+    state.email = aiosmtplib.SMTP(
+        hostname=hostname, use_tls=True
+    )
+    await state.email.ehlo()
+    await state.email.login(username=user, password=passwd)
 
+async def send_email(email: Union[EmailMessage, Message]):
+    return await state.email.send_message(email)
 
 @app.on_event("shutdown")
 async def on_shutdown():
@@ -115,6 +111,50 @@ async def api_item_get(id: str):
     if not item:
         raise fastapi.HTTPException(404, detail="item not found")
     return dict(item)
+
+
+@app.post("/api/admin/login")
+async def admin_login(
+    request: Request, username: str = Form(...), password: str = Form(...)
+):
+    if username.lower() == "admin" and password.lower() == "admin":
+        request.session["admin"] = 0
+        return Response(status_code=204)
+    raise fastapi.HTTPException(404, "user not found")
+
+@app.post("/api/admin/logout")
+async def admin_logout(request: Request):
+    if "admin" not in request.session:
+        raise fastapi.HTTPException(401)
+    request.session.pop("admin")
+    return Response(status_code=204)
+
+@app.get("/api/pemesanan")
+async def api_pemesanans(request: Request):
+    if "admin" not in request.session:
+        raise fastapi.HTTPException(401)
+    return [dict(i) for i in await state.db.fetch("SELECT * FROM pemesanan")]
+
+
+@app.get("/api/pemesanan/{id}")
+async def api_pemesanan(request: Request, id: str):
+    if "admin" not in request.session:
+        raise fastapi.HTTPException(401)
+
+    async with state.db.acquire() as conn:
+        conn: asyncpg.Connection
+        pemesanan = await conn.fetchrow("SELECT * FROM pemesanan WHERE id = $1", id)
+        if not pemesanan:
+            raise fastapi.HTTPException(404, "pemesanan not found")
+        pemesanan = dict(pemesanan)
+        items = [
+            dict(i)
+            for i in await conn.fetch(
+                "SELECT * FROM pemesanan_items WHERE pemesanan = $1", id
+            )
+        ]
+        pemesanan["items"] = items
+        return pemesanan
 
 
 @app.get("/api/cart")
@@ -188,21 +228,25 @@ async def beli_post(
                 [
                     (id, i["quantity"], i["price"] * i["quantity"], i["id"])
                     for i in items.values()
-                ]
+                ],
             )
             await conn.executemany(
-                "UPDATE barang SET total = total - $1 WHERE id = $2", [(i["quantity"], i["id"]) for i in items.values()]
+                "UPDATE barang SET total = total - $1 WHERE id = $2",
+                [(i["quantity"], i["id"]) for i in items.values()],
             )
-    transaction = await create_transaction(sum((i["price"] * i["quantity"] for i in items.values())))
+    transaction = await create_transaction(
+        sum((i["price"] * i["quantity"] for i in items.values()))
+    )
     request.session["transaction"] = {
         "id": id,
         "fullname": fullname,
         "email": email,
         "total_price": transaction.amount,
-        "items": [i for i in request.session["items"].values()]
+        "items": [i for i in request.session["items"].values()],
     }
     request.session["items"].clear()
     return RedirectResponse(pay_url.format(transaction.id), 301)
+
 
 @app.get("/api/pay")
 async def beli_get(request: Request):
@@ -214,7 +258,12 @@ async def beli_get(request: Request):
     msg["From"] = user
     msg["To"] = transaction["email"]
 
-    items = "<br>".join([f"{i['name']}: {i['quantity']:,}x Rp.{i['quantity']*i['price']:,}" for i in transaction["items"]])
+    items = "<br>".join(
+        [
+            f"{i['name']}: {i['quantity']:,}x Rp.{i['quantity']*i['price']:,}"
+            for i in transaction["items"]
+        ]
+    )
     content = f"""
     Hai {transaction["fullname"]}!, pesanan anda sedang diproses mohon menunggu dan terima kasih telah berbelanja!
     <h2 style="border-bottom: solid rgb(200,200,200) 1px">Receipt</h2>
@@ -225,5 +274,5 @@ async def beli_get(request: Request):
     """
     msg.set_content(content)
     msg.set_type("text/html")
-    await state.email.send_message(msg)
+    await send_email(msg)
     return RedirectResponse("/pay/done", 301)
